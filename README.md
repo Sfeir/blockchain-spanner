@@ -51,5 +51,6 @@ gcloud beta spanner databases execute-sql example-db --instance=test-instance --
 
 Delete spanner instance !!!!!
 
-```gcloud beta spanner instances delete test-instance
+```
+gcloud beta spanner instances delete test-instance
 ```
