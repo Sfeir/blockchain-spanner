@@ -48,3 +48,8 @@ Check that the block has been added
 gcloud beta spanner databases execute-sql example-db --instance=test-instance --sql='SELECT * FROM Logs'
 ```
 
+
+Delete spanner instance !!!!!
+
+```gcloud beta spanner instances delete test-instance
+```
