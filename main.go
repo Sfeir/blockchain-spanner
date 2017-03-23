@@ -17,7 +17,10 @@ import (
 	"encoding/hex"
 )
 
-const databaseName string = "projects/deuxmilledollars/instances/test-instance/databases/example-db"
+
+func getDatabaseName(ctx context.Context) string {
+	return "projects/" + appengine.AppID(ctx) + "/instances/test-instance/databases/example-db"
+}
 
 func init() {
 	http.HandleFunc("/write", writeData)
@@ -44,7 +47,7 @@ func createAdminClient(ctx context.Context) *database.DatabaseAdminClient {
 
 func createDatabase(ctx context.Context, client *spanner.Client, w http.ResponseWriter) error {
 
-	db := databaseName
+	db := getDatabaseName(ctx)
 	adminClient := createAdminClient(ctx)
 
 	matches := regexp.MustCompile("^(.*)/databases/(.*)$").FindStringSubmatch(db)
@@ -55,13 +58,13 @@ func createDatabase(ctx context.Context, client *spanner.Client, w http.Response
 		Parent:          matches[1],
 		CreateStatement: "CREATE DATABASE `" + matches[2] + "`",
 		ExtraStatements: []string{
-			`CREATE TABLE Logs (
-				LogId   INT64 NOT NULL,
+			`CREATE TABLE Blocks (
+				BlockId   INT64 NOT NULL,
 				Message  STRING(1024),
 				MyHash   STRING(1024),
 				HashBefore STRING(1024),
 				HashAfter  STRING(1024)
-			) PRIMARY KEY (LogId)`,
+			) PRIMARY KEY (BlockId)`,
 		},
 	})
 	if err != nil {
@@ -75,8 +78,8 @@ func createDatabase(ctx context.Context, client *spanner.Client, w http.Response
 	newHashBefore := ""
 	newHashAfter := ""
 
-	logsColumns := []string{"LogId", "Message", "MyHash", "HashBefore", "HashAfter"}
-	if err := writeMessage(logsColumns, 1, newMessage, newMyHash, newHashBefore, newHashAfter, client, ctx); err != nil {
+	blocksColumns := []string{"BlockId", "Message", "MyHash", "HashBefore", "HashAfter"}
+	if err := writeMessage(blocksColumns, 1, newMessage, newMyHash, newHashBefore, newHashAfter, client, ctx); err != nil {
 		return err
 	}
 	return nil
@@ -92,10 +95,10 @@ func computeSha1(message string) string {
 }
 
 func write(ctx context.Context, client *spanner.Client, newMessage string) error {
-	logsColumns := []string{"LogId", "Message", "MyHash", "HashBefore", "HashAfter"}
+	blocksColumns := []string{"blockId", "Message", "MyHash", "HashBefore", "HashAfter"}
 
 	stmt := spanner.Statement{
-		SQL: `select * FROM Logs WHERE HashAfter = ""`}
+		SQL: `select * FROM Blocks WHERE HashAfter = ""`}
 	iter := client.Single().Query(ctx, stmt)
 	defer iter.Stop()
 
@@ -107,13 +110,13 @@ func write(ctx context.Context, client *spanner.Client, newMessage string) error
 		if err != nil {
 			return err
 		}
-		var logIDPrevious int64
+		var blockIDPrevious int64
 		var messagePrevious string
 		var myHashPrevious string
 		var hashBeforePrevious string
 		var hashAfterPrevious string
 
-		if err := row.ColumnByName("LogId", &logIDPrevious); err != nil {
+		if err := row.ColumnByName("BlockId", &blockIDPrevious); err != nil {
 			return err
 		}
 		if err := row.ColumnByName("Message", &messagePrevious); err != nil {
@@ -134,12 +137,12 @@ func write(ctx context.Context, client *spanner.Client, newMessage string) error
 		newHashAfter := ""
 
 		// add new message
-		if err := writeMessage(logsColumns, logIDPrevious+1, newMessage, newMyHash, newHashBefore, newHashAfter, client, ctx); err != nil {
+		if err := writeMessage(blocksColumns, blockIDPrevious+1, newMessage, newMyHash, newHashBefore, newHashAfter, client, ctx); err != nil {
 			return err
 		}
 
 		// update previous message
-		if err := writeMessage(logsColumns, logIDPrevious, messagePrevious, myHashPrevious, hashBeforePrevious, newMyHash, client, ctx); err != nil {
+		if err := writeMessage(blocksColumns, blockIDPrevious, messagePrevious, myHashPrevious, hashBeforePrevious, newMyHash, client, ctx); err != nil {
 			return err
 		}
 
@@ -149,9 +152,9 @@ func write(ctx context.Context, client *spanner.Client, newMessage string) error
 	return nil
 
 }
-func writeMessage(logsColumns []string, logID int64, newMessage string, newMyHash string, newHashBefore string, newHashAfter string, client *spanner.Client, ctx context.Context) error {
+func writeMessage(blocksColumns []string, blockID int64, newMessage string, newMyHash string, newHashBefore string, newHashAfter string, client *spanner.Client, ctx context.Context) error {
 	m := []*spanner.Mutation{
-		spanner.InsertOrUpdate("Logs", logsColumns, []interface{}{logID, newMessage, newMyHash, newHashBefore, newHashAfter}),
+		spanner.InsertOrUpdate("Blocks", blocksColumns, []interface{}{blockID, newMessage, newMyHash, newHashBefore, newHashAfter}),
 	}
 	_, err := client.Apply(ctx, m)
 	return err
@@ -163,7 +166,7 @@ func writeData(w http.ResponseWriter, r *http.Request) {
 	if(message != "") {
 		c := appengine.NewContext(r)
 
-		dataClient := createDataClient(c, databaseName)
+		dataClient := createDataClient(c, getDatabaseName(c))
 		err := write(c, dataClient, message)
 		fmt.Fprint(w, err)
 	}
@@ -171,7 +174,7 @@ func writeData(w http.ResponseWriter, r *http.Request) {
 
 func createDB(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
-	dataClient := createDataClient(c, databaseName)
+	dataClient := createDataClient(c, getDatabaseName(c))
 	err := createDatabase(c, dataClient, w)
 	fmt.Fprint(w, err)
 }
