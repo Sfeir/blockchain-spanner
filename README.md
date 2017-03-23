@@ -21,7 +21,7 @@ goapp deploy -application <AppID> -version <version>
 Create the database :
 
 ```
-https://AppID.appspot.com/create
+curl https://AppID.appspot.com/create
 ```
 
 Check that the database is created :
@@ -33,19 +33,19 @@ gcloud beta spanner databases list --instance=test-instance
 Check that the first block is created :
 
 ```
-gcloud beta spanner databases execute-sql example-db --instance=test-instance --sql='SELECT * FROM Logs'
+gcloud beta spanner databases execute-sql example-db --instance=test-instance --sql='SELECT * FROM Blocks'
 ```
 
 Add block to the chain :
 
 ```
-https://AppId.appspot.com/write?message=<yourNewBlockMessage>
+curl https://AppId.appspot.com/write?message=<yourNewBlockMessage>
 ```
 
 Check that the block has been added
 
 ```
-gcloud beta spanner databases execute-sql example-db --instance=test-instance --sql='SELECT * FROM Logs'
+gcloud beta spanner databases execute-sql example-db --instance=test-instance --sql='SELECT * FROM Blocks'
 ```
 
 
