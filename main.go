@@ -1,39 +1,51 @@
 package spanner_blockchain
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	//	"cloud.google.com/go/spanner/admin/database/apiv1"
 	"cloud.google.com/go/spanner"
 	"cloud.google.com/go/spanner/admin/database/apiv1"
+	"fmt"
 	adminpb "google.golang.org/genproto/googleapis/spanner/admin/database/v1"
+	"log"
+	"net/http"
 
+	"crypto/sha1"
+	"encoding/hex"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 	"google.golang.org/appengine"
 	"regexp"
-	"crypto/sha1"
-	"encoding/hex"
 )
 
+const (
+	databaseUrl = "projects/%s/instances/test-instance/database/example-db"
+)
 
-func getDatabaseName(ctx context.Context) string {
-	return "projects/" + appengine.AppID(ctx) + "/instances/test-instance/databases/example-db"
-}
+var (
+	spannerClient *spanner.Client
+)
 
 func init() {
-	http.HandleFunc("/write", writeData)
-	http.HandleFunc("/create", createDB)
-}
-
-func createDataClient(ctx context.Context, db string) *spanner.Client {
-
-	dataClient, err := spanner.NewClient(ctx, db)
+	// init spanner db
+	ctx := context.Background()
+	sc, err := createDatabase(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return dataClient
+
+	// init global spanner client
+	spannerClient = sc
+
+	// install handler
+	http.HandleFunc("/write", writeData)
+}
+
+/*func getDatabaseName(ctx context.Context) string {
+	return fmt.Sprintf(databaseUrl, appengine.AppID(ctx))
+}*/
+
+func getDatabaseName(ctx context.Context) string {
+	return "projects/randommeetupgenerator/instances/test-instance/databases/example-db"
 }
 
 func createAdminClient(ctx context.Context) *database.DatabaseAdminClient {
@@ -45,15 +57,16 @@ func createAdminClient(ctx context.Context) *database.DatabaseAdminClient {
 	return adminClient
 }
 
-func createDatabase(ctx context.Context, client *spanner.Client, w http.ResponseWriter) error {
+func createDatabase(ctx context.Context) (*spanner.Client, error) {
 
 	db := getDatabaseName(ctx)
 	adminClient := createAdminClient(ctx)
 
 	matches := regexp.MustCompile("^(.*)/databases/(.*)$").FindStringSubmatch(db)
 	if matches == nil || len(matches) != 3 {
-		return fmt.Errorf("Invalid database id %s", db)
+		return nil, errors.New("invalid database id" + db)
 	}
+
 	op, err := adminClient.CreateDatabase(ctx, &adminpb.CreateDatabaseRequest{
 		Parent:          matches[1],
 		CreateStatement: "CREATE DATABASE `" + matches[2] + "`",
@@ -68,11 +81,17 @@ func createDatabase(ctx context.Context, client *spanner.Client, w http.Response
 		},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if _, err := op.Wait(ctx); err == nil {
-		fmt.Fprintf(w, "Created database [%s]\n", db)
+		log.Println("Created database " + db)
 	}
+
+	client, err := spanner.NewClient(ctx, db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	newMessage := "Block 0"
 	newMyHash := computeSha1(newMessage)
 	newHashBefore := ""
@@ -80,9 +99,9 @@ func createDatabase(ctx context.Context, client *spanner.Client, w http.Response
 
 	blocksColumns := []string{"BlockId", "Message", "MyHash", "HashBefore", "HashAfter"}
 	if err := writeMessage(blocksColumns, 1, newMessage, newMyHash, newHashBefore, newHashAfter, client, ctx); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return client, nil
 }
 
 func computeSha1(message string) string {
@@ -91,15 +110,15 @@ func computeSha1(message string) string {
 	h.Write([]byte(message))
 	sha1_hash := hex.EncodeToString(h.Sum(nil))
 
-	return  sha1_hash
+	return sha1_hash
 }
 
-func write(ctx context.Context, client *spanner.Client, newMessage string) error {
+func write(ctx context.Context, newMessage string) error {
 	blocksColumns := []string{"blockId", "Message", "MyHash", "HashBefore", "HashAfter"}
 
 	stmt := spanner.Statement{
 		SQL: `select * FROM Blocks WHERE HashAfter = ""`}
-	iter := client.Single().Query(ctx, stmt)
+	iter := spannerClient.Single().Query(ctx, stmt)
 	defer iter.Stop()
 
 	for {
@@ -137,12 +156,12 @@ func write(ctx context.Context, client *spanner.Client, newMessage string) error
 		newHashAfter := ""
 
 		// add new message
-		if err := writeMessage(blocksColumns, blockIDPrevious+1, newMessage, newMyHash, newHashBefore, newHashAfter, client, ctx); err != nil {
+		if err := writeMessage(blocksColumns, blockIDPrevious+1, newMessage, newMyHash, newHashBefore, newHashAfter, spannerClient, ctx); err != nil {
 			return err
 		}
 
 		// update previous message
-		if err := writeMessage(blocksColumns, blockIDPrevious, messagePrevious, myHashPrevious, hashBeforePrevious, newMyHash, client, ctx); err != nil {
+		if err := writeMessage(blocksColumns, blockIDPrevious, messagePrevious, myHashPrevious, hashBeforePrevious, newMyHash, spannerClient, ctx); err != nil {
 			return err
 		}
 
@@ -163,18 +182,9 @@ func writeMessage(blocksColumns []string, blockID int64, newMessage string, newM
 func writeData(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "Write")
 	message := r.URL.Query().Get("message")
-	if(message != "") {
+	if message != "" {
 		c := appengine.NewContext(r)
-
-		dataClient := createDataClient(c, getDatabaseName(c))
-		err := write(c, dataClient, message)
+		err := write(c, message)
 		fmt.Fprint(w, err)
 	}
-}
-
-func createDB(w http.ResponseWriter, r *http.Request) {
-	c := appengine.NewContext(r)
-	dataClient := createDataClient(c, getDatabaseName(c))
-	err := createDatabase(c, dataClient, w)
-	fmt.Fprint(w, err)
 }
