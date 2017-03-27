@@ -1,4 +1,4 @@
-package spanner_blockchain
+package main
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package spanner_blockchain
+package main
 
 import (
 	"cloud.google.com/go/spanner"
@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
-	"google.golang.org/appengine"
 	"regexp"
 )
 
@@ -25,10 +24,8 @@ var (
 	spannerClient *spanner.Client
 )
 
-func init() {
-	// init spanner db
-	ctx := context.Background()
-	sc, err := createDatabase(ctx)
+func main() {
+	sc, err := createDatabase()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,6 +35,7 @@ func init() {
 
 	// install handler
 	http.HandleFunc("/write", writeData)
+	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
 }
 
 /*func getDatabaseName(ctx context.Context) string {
@@ -57,7 +55,8 @@ func createAdminClient(ctx context.Context) *database.DatabaseAdminClient {
 	return adminClient
 }
 
-func createDatabase(ctx context.Context) (*spanner.Client, error) {
+func createDatabase() (*spanner.Client, error) {
+	ctx := context.Background()
 
 	db := getDatabaseName(ctx)
 	adminClient := createAdminClient(ctx)
@@ -80,6 +79,7 @@ func createDatabase(ctx context.Context) (*spanner.Client, error) {
 			) PRIMARY KEY (BlockId)`,
 		},
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func writeData(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "Write")
 	message := r.URL.Query().Get("message")
 	if message != "" {
-		c := appengine.NewContext(r)
+		c := context.Background()
 		err := write(c, message)
 		fmt.Fprint(w, err)
 	}
