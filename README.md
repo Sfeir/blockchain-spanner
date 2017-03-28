@@ -6,5 +6,5 @@ it is possible to build a basic blockchain in 200 lines of code.
 Pull requests are welcome.
 
 
-[Google App Engine Standard](./appengine-standard)
-[Google App Engine Flexible](./appengine-flexible)
+- [Google App Engine Standard](./appengine-standard)
+- [Google App Engine Flexible](./appengine-flexible)
