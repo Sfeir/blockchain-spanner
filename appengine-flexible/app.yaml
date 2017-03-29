@@ -1,0 +1,11 @@
+runtime: go
+env: flex
+
+automatic_scaling:
+  min_num_instances: 1
+
+#[START env_variables]
+env_variables:
+  GCLOUD_DATASET_ID: yourapplicationid
+#[END env_variables]
+
