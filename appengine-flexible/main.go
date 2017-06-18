@@ -43,7 +43,7 @@ func main() {
 
 	http.HandleFunc("/_ah/health", healthCheckHandler)
 
-	log.Print("Listening on port 8080")
+	log.Printf("Listening on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -102,7 +102,7 @@ func createDatabase(ctx context.Context, client *spanner.Client) error {
 		return err
 	}
 	if _, err := op.Wait(ctx); err == nil {
-		log.Print("Created database [%s]\n", db)
+		log.Printf("Created database [%s]\n", db)
 	}
 	newMessage := "Block 0"
 	newMyHash := computeSha1(newMessage)
@@ -166,11 +166,11 @@ func writeWithTransaction(ctx context.Context, client *spanner.Client, newMessag
 
 	_, err := client.ReadWriteTransaction(ctx, func(txn *spanner.ReadWriteTransaction) error {
 
-		log.Print(">>>>>>Begin Transaction")
+		log.Printf(">>>>>>Begin Transaction")
 
 		lastBlock, errFind := findLastBlock(txn, ctx)
 		if errFind != nil {
-			log.Print(errFind.Error())
+			log.Printf(errFind.Error())
 			return errFind
 		}
 
@@ -183,8 +183,8 @@ func writeWithTransaction(ctx context.Context, client *spanner.Client, newMessag
 		newHashBefore := blockReadInTransaction.MyHash
 		newHashAfter := ""
 
-		log.Print(ctx, "previous Block %d, %s, %s, %s, %s", blockReadInTransaction.BlockId, blockReadInTransaction.Message, blockReadInTransaction.MyHash, blockReadInTransaction.HashBefore, newMyHash)
-		log.Print(ctx, "new Block %d, %s, %s, %s, %s", blockReadInTransaction.BlockId+1, newMessage, newMyHash, newHashBefore, newHashAfter)
+		log.Printf("previous Block %d, %s, %s, %s, %s", blockReadInTransaction.BlockId, blockReadInTransaction.Message, blockReadInTransaction.MyHash, blockReadInTransaction.HashBefore, newMyHash)
+		log.Printf("new Block %d, %s, %s, %s, %s", blockReadInTransaction.BlockId+1, newMessage, newMyHash, newHashBefore, newHashAfter)
 
 		txn.BufferWrite([]*spanner.Mutation{
 			spanner.InsertOrUpdate("Blocks", blocksColumns, []interface{}{blockReadInTransaction.BlockId + 1, newMessage, newMyHash, newHashBefore, newHashAfter}),
@@ -192,13 +192,13 @@ func writeWithTransaction(ctx context.Context, client *spanner.Client, newMessag
 
 		})
 
-		log.Print(ctx, ">>>>>>End Transaction")
+		log.Printf( ">>>>>>End Transaction")
 
 		return nil
 	})
 
 	if err != nil {
-		log.Print(err.Error())
+		log.Printf(err.Error())
 	}
 	return err
 }
@@ -215,7 +215,7 @@ func handleWrite(w http.ResponseWriter, r *http.Request, ctx context.Context, da
 
 		err := writeWithTransaction(ctx, dataClient, message)
 		if err != nil {
-			log.Print(err.Error())
+			log.Printf(err.Error())
 			fmt.Fprint(w, err)
 		}
 
@@ -229,7 +229,7 @@ func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 func createDataClient(ctx context.Context, db string) *spanner.Client {
 	dataBaseClient, err := spanner.NewClient(ctx, db)
 	if err != nil {
-		log.Print(err.Error())
+		log.Printf(err.Error())
 	}
 
 	return dataBaseClient
@@ -238,7 +238,7 @@ func createDataClient(ctx context.Context, db string) *spanner.Client {
 func createAdminClient(ctx context.Context) *database.DatabaseAdminClient {
 	adminClient, err := database.NewDatabaseAdminClient(ctx)
 	if err != nil {
-		log.Print(err.Error())
+		log.Printf(err.Error())
 	}
 
 	return adminClient

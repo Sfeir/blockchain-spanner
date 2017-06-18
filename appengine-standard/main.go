@@ -138,7 +138,9 @@ func findLastBlock(txn *spanner.ReadWriteTransaction, ctx context.Context) (bloc
 
 func writeWithTransaction(ctx context.Context, client *spanner.Client, newMessage string) error {
 
-	_, err := client.ReadWriteTransaction(ctx, func(txn *spanner.ReadWriteTransaction) error {
+
+
+	_, err := client.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 
 		log.Infof(ctx, ">>>>>>Begin Transaction")
 
@@ -209,5 +211,4 @@ func createDB(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Fprint(w, err)
 	}
-
 }
